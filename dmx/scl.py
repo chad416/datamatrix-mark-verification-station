@@ -23,7 +23,8 @@ Operation counting (for the PLC cycle-time budget, dossier section 7):
 
 Origin: copied from the author's extruder-pressure-fill-estimator project (same author,
 MIT), then extended with VAR RETAIN (retentive static data) and `power_cycle()`, which
-resets everything that is not retentive, as a warm restart after a power loss does.
+resets everything that is not retentive, as a warm restart after a power loss does, with
+DINT_TO_INT, and with elements of array outputs of a multi-instance (#Inst.Member[i]).
 
 Anything else raises SclError, so an unsupported construct can never be
 silently ignored.  The authority for the real PLC is the TIA Portal compiler;
@@ -337,6 +338,14 @@ class Parser:
             if member not in fb_vars or fb_vars[member].section not in ("VAR_OUTPUT", "VAR_INPUT"):
                 raise SclError(f"line {tok.line}: {d.name}.{member} is not an input/output")
             src, typ = f"self.{d.name}.{member}", fb_vars[member].type
+            if typ == "ARRAY":                      # element of an array output: #Inst.Member[i]
+                m = fb_vars[member]
+                self.expect("[")
+                idx, it = self.expr()
+                self.expect("]")
+                if it not in ("INT", "DINT"):
+                    raise SclError(f"line {tok.line}: array index must be integer")
+                src, typ = f"self.{d.name}.{member}[_ix({idx}, {m.lo}, {m.hi})]", m.elem
         return src, typ
 
     def function_call(self, tok: Tok) -> tuple[str, str]:

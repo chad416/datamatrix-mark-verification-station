@@ -1,0 +1,159 @@
+FUNCTION_BLOCK "FB_SimMarker"
+TITLE = Test bench stand-in for the laser marker
+{ S7_Optimized_Access := 'TRUE' }
+AUTHOR : chad416
+VERSION : 0.1
+//  Deterministic model of the stand-in marker protocol (DOSSIER section 4.2). Not a real marker.
+//  A mark takes two calls after the start command. One fault per part, chosen by FaultKind:
+//     0 none
+//     1 the marker never acknowledges the load
+//     2 after the start the marker hangs and leaves no mark
+//     3 after the start the marker hangs, the mark is complete (the done signal is lost)
+//     4 the marker raises its fault signal during marking, the mark is partial
+//     5 the marker keeps the previous job and echoes the old number
+//     6 the marker keeps the previous job and echoes the new number
+//     7 the marker keeps the previous serial and echoes the old one
+//     8 the marker keeps the previous serial and echoes the new one
+//     9 the marker keeps job and serial and echoes the new ones
+//  Other values are faults of the reader, the part or the record store: no effect here.
+   VAR_INPUT
+      MkLoad : Bool;
+      MkStart : Bool;
+      MkJobNo : Int;
+      MkSerial : DInt;
+      PartPresent : Bool;
+      FaultKind : Int;
+      NewPart : Bool;   // a new part has arrived: the fault of the last part is over
+   END_VAR
+
+   VAR_OUTPUT
+      MkLoaded : Bool;
+      MkJobEcho : Int;
+      MkSerialEcho : DInt;
+      MkDone : Bool;
+      MkFault : Bool;
+      StartEvent : Bool;   // a start command reached a part in this call
+      MarkEvent : Int;   // 0 nothing, 1 the part now carries a partial mark, 2 a complete mark
+      MarkJob : Int;   // job and serial the marker really holds
+      MarkSerial : DInt;
+   END_VAR
+
+   VAR
+      ActJob : Int;
+      ActSerial : DInt;
+      EchoJob : Int;
+      EchoSerial : DInt;
+      IsLoaded : Bool;
+      IsDone : Bool;
+      FaultSignal : Bool;
+      BusyCalls : Int;   // calls until the mark is finished, 0 = not marking
+      Hung : Bool;
+      Dead : Bool;
+      FaultUsed : Bool;
+      EvStart : Bool;
+      EvMark : Int;
+   END_VAR
+
+BEGIN
+   #EvStart := FALSE;
+   #EvMark := 0;
+   IF #NewPart OR #FaultKind = 0 THEN
+      #FaultUsed := FALSE;
+      #Hung := FALSE;
+      #Dead := FALSE;
+   END_IF;
+
+   IF #Dead THEN
+      #IsLoaded := FALSE;
+   ELSE
+      IF NOT #MkLoad THEN
+         #IsLoaded := FALSE;
+         #FaultSignal := FALSE;
+      END_IF;
+      IF NOT #MkStart THEN
+         IF #BusyCalls > 0 THEN
+            // the start was dropped during marking: the marker stops, the mark stays unfinished
+            IF #PartPresent THEN
+               #EvMark := 1;
+            END_IF;
+            #BusyCalls := 0;
+         END_IF;
+         #IsDone := FALSE;
+      END_IF;
+
+      IF #MkLoad AND NOT #IsLoaded AND NOT #FaultSignal THEN
+         REGION Load
+         IF #FaultKind = 1 AND NOT #FaultUsed THEN
+            #Dead := TRUE;
+            #FaultUsed := TRUE;
+         ELSE
+            #EchoJob := #MkJobNo;
+            #EchoSerial := #MkSerial;
+            IF NOT #FaultUsed AND (#FaultKind = 5 OR #FaultKind = 6) AND #ActJob <> 0 AND #ActJob <> #MkJobNo THEN
+               IF #FaultKind = 5 THEN
+                  #EchoJob := #ActJob;
+               END_IF;
+               #ActSerial := #MkSerial;
+               #FaultUsed := TRUE;
+            ELSIF NOT #FaultUsed AND (#FaultKind = 7 OR #FaultKind = 8) AND #ActSerial <> 0 AND #ActSerial <> #MkSerial THEN
+               IF #FaultKind = 7 THEN
+                  #EchoSerial := #ActSerial;
+               END_IF;
+               #ActJob := #MkJobNo;
+               #FaultUsed := TRUE;
+            ELSIF NOT #FaultUsed AND #FaultKind = 9 AND #ActJob <> 0 AND #ActSerial <> 0 AND #ActSerial <> #MkSerial THEN
+               #FaultUsed := TRUE;
+            ELSE
+               #ActJob := #MkJobNo;
+               #ActSerial := #MkSerial;
+            END_IF;
+            #IsLoaded := TRUE;
+         END_IF;
+         END_REGION
+      ELSIF #MkStart AND #IsLoaded AND NOT #IsDone AND #BusyCalls <= 0 AND NOT #FaultSignal AND NOT #Hung THEN
+         REGION Start
+         IF #PartPresent THEN
+            #EvStart := TRUE;
+         END_IF;
+         IF #PartPresent AND NOT #FaultUsed AND #FaultKind = 2 THEN
+            #Hung := TRUE;
+            #FaultUsed := TRUE;
+         ELSIF #PartPresent AND NOT #FaultUsed AND #FaultKind = 3 THEN
+            #Hung := TRUE;
+            #FaultUsed := TRUE;
+            #EvMark := 2;
+         ELSIF #PartPresent AND NOT #FaultUsed AND #FaultKind = 4 THEN
+            #FaultSignal := TRUE;
+            #FaultUsed := TRUE;
+            #EvMark := 1;
+         ELSE
+            #BusyCalls := 2;
+         END_IF;
+         END_REGION
+      ELSIF #BusyCalls > 0 THEN
+         REGION Marking
+         IF #BusyCalls = 1 THEN
+            IF #PartPresent THEN
+               #EvMark := 2;
+            END_IF;
+            #BusyCalls := 0;
+            #IsDone := TRUE;
+         ELSE
+            #BusyCalls := #BusyCalls - 1;
+         END_IF;
+         END_REGION
+      END_IF;
+   END_IF;
+
+   REGION Outputs
+   #MkLoaded := #IsLoaded;
+   #MkJobEcho := #EchoJob;
+   #MkSerialEcho := #EchoSerial;
+   #MkDone := #IsDone;
+   #MkFault := #FaultSignal;
+   #StartEvent := #EvStart;
+   #MarkEvent := #EvMark;
+   #MarkJob := #ActJob;
+   #MarkSerial := #ActSerial;
+   END_REGION
+END_FUNCTION_BLOCK

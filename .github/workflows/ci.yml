@@ -18,6 +18,8 @@ jobs:
         run: python -m pytest -q
       - name: SCL sources translate (the TIA Portal build itself needs Windows and TIA Portal)
         run: python -c "import glob; from dmx import scl; print(list(scl.load(sorted(glob.glob('plc/FB_*.scl')))))"
+      - name: PLC test bench - generated case table is up to date and all cases pass in the translator
+        run: python scripts/make_testbench.py --check
       - name: Study, reduced size, and checks on its output
         run: |
           python scripts/run_all.py --quick

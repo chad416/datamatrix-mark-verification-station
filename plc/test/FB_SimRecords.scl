@@ -1,0 +1,60 @@
+FUNCTION_BLOCK "FB_SimRecords"
+TITLE = Test bench stand-in for the traceability record store
+{ S7_Optimized_Access := 'TRUE' }
+AUTHOR : chad416
+VERSION : 0.1
+//  Deterministic model of the record handshake (DOSSIER section 4.2). Not a real database.
+//  A request is stored and acknowledged in the same call, or one call later when Slow is set.
+//  The acknowledge stays until the request drops. The block only counts what was stored.
+   VAR_INPUT
+      RecReq : Bool;
+      RecSerial : DInt;
+      RecStatus : Int;   // 1 good, 2 void
+      Slow : Bool;
+   END_VAR
+
+   VAR_OUTPUT
+      RecAck : Bool;
+      GoodCount : Int;   // records stored since the start
+      VoidCount : Int;
+      SerialSum : DInt;   // sum of the serial numbers of all stored records
+      LastGoodSerial : DInt;
+   END_VAR
+
+   VAR
+      Ack : Bool;
+      Waited : Bool;
+      NGood : Int;
+      NVoid : Int;
+      SumSerial : DInt;
+      LastGood : DInt;
+   END_VAR
+
+BEGIN
+   IF #RecReq AND NOT #Ack THEN
+      IF #Slow AND NOT #Waited THEN
+         #Waited := TRUE;
+      ELSE
+         IF #RecStatus = 1 THEN
+            #NGood := #NGood + 1;
+            #LastGood := #RecSerial;
+         ELSE
+            #NVoid := #NVoid + 1;
+         END_IF;
+         #SumSerial := #SumSerial + #RecSerial;
+         #Ack := TRUE;
+         #Waited := FALSE;
+      END_IF;
+   ELSIF NOT #RecReq THEN
+      #Ack := FALSE;
+      #Waited := FALSE;
+   END_IF;
+
+   REGION Outputs
+   #RecAck := #Ack;
+   #GoodCount := #NGood;
+   #VoidCount := #NVoid;
+   #SerialSum := #SumSerial;
+   #LastGoodSerial := #LastGood;
+   END_REGION
+END_FUNCTION_BLOCK

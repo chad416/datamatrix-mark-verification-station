@@ -1,0 +1,21 @@
+ORGANIZATION_BLOCK "Main"
+TITLE = Calls the self-checking test bench in every cycle
+{ S7_Optimized_Access := 'TRUE' }
+AUTHOR : chad416
+VERSION : 0.1
+//  The bench needs no input. It finishes on its own and then holds its result.
+//  Open "DB_TestResult" and monitor it: docs/PLCSIM_RUN.md lists the values that mean pass.
+
+BEGIN
+   "DB_TestBench"();
+   "DB_TestResult".Done := "DB_TestBench".Done;
+   "DB_TestResult".AllPassed := "DB_TestBench".AllPassed;
+   "DB_TestResult".CasesTotal := "DB_TestBench".CasesTotal;
+   "DB_TestResult".CasesRun := "DB_TestBench".CasesRun;
+   "DB_TestResult".CasesPassed := "DB_TestBench".CasesPassed;
+   "DB_TestResult".CasesFailed := "DB_TestBench".CasesFailed;
+   "DB_TestResult".FirstFailedCase := "DB_TestBench".FirstFailedCase;
+   "DB_TestResult".FirstFailedCheck := "DB_TestBench".FirstFailedCheck;
+   "DB_TestResult".Calls := "DB_TestBench".Calls;
+   "DB_TestResult".CasePass := "DB_TestBench".CasePass;
+END_ORGANIZATION_BLOCK

@@ -1,0 +1,11 @@
+DATA_BLOCK "DB_TestBench"
+TITLE = Instance data of the test bench
+{ S7_Optimized_Access := 'TRUE' }
+AUTHOR : chad416
+VERSION : 0.1
+NON_RETAIN
+"FB_TestBench"
+
+BEGIN
+
+END_DATA_BLOCK

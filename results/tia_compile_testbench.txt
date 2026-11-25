@@ -1,0 +1,43 @@
+﻿TIA Portal V18, CPU OrderNumber:6ES7 513-1AL02-0AB0/V2.9, 2026-11-25 04:20
+simulation support during block compilation: True
+confidential PLC configuration data: None (simulation test project)
+generated FB_JobSelect
+generated FB_CodeContent
+generated FB_MarkStation
+generated FB_BenchCases
+generated FB_SimMarker
+generated FB_SimReader
+generated FB_SimRecords
+generated FB_TestBench
+generated DB_TestBench
+generated DB_TestResult
+generated OB_Main
+CPU access level: NoAccess -> FullAccess (simulation test project)
+COMPILE Success  errors=0  warnings=0
+  Success  PLC_1  
+    Success  Program blocks  
+      Success  FB_TestBench (FB8)  Block was successfully compiled.
+      Success  FB_BenchCases (FB4)  Block was successfully compiled.
+      Success  FB_JobSelect (FB1)  Block was successfully compiled.
+      Success  FB_MarkStation (FB3)  Block was successfully compiled.
+      Success  FB_SimMarker (FB5)  Block was successfully compiled.
+      Success  FB_SimReader (FB6)  Block was successfully compiled.
+      Success  FB_SimRecords (FB7)  Block was successfully compiled.
+      Success  FB_CodeContent (FB2)  Block was successfully compiled.
+      Success  Main (OB1)  Block was successfully compiled.
+  Success    Compiling finished (errors: 0; warnings: 0)
+HWCOMPILE Warning  errors=0  warnings=2
+  Warning  PLC_1  
+    Warning  Hardware configuration  
+      Warning  PLC_1   
+        Warning  Rail_0   
+          Warning  PLC_1   
+            Warning  PLC_1   
+              Warning    PLC_1 does not contain a configured protection level
+            Warning  CPU display_1   
+              Warning    The S7-1500 CPU display does not contain any password protection.
+    Information  Program blocks  
+      Information    No block was compiled. All blocks are up-to-date.
+  Warning    Compiling finished (errors: 0; warnings: 2)
+ARCHIVE C:\TIA_build\plcsim\dmc36_plcsim_test.zap18  699861 bytes
+

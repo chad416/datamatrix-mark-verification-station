@@ -69,7 +69,8 @@ Counterexample traces for the removed safeguards: [results/handshake_exploration
 | Study | Drift mix, sweeps, acceptance rules, both error rates | `dmx/study.py`, `scripts/run_all.py` |
 | PLC | Job selection from a 320-row recipe table, code content builder, marking sequence with retentive serial counter | `plc/FB_JobSelect.scl`, `plc/FB_CodeContent.scl`, `plc/FB_MarkStation.scl` |
 | SCL in the loop | Translator that executes the SCL source text; exhaustive state-space search with mutants | `dmx/scl.py`, `dmx/explore.py` |
-| Tests | Published vectors, an independent library (tests only), closed forms, published grade tables, SCL blocks, the search | `tests/` |
+| PLC test bench | Self-checking bench for S7-PLCSIM: SCL stand-ins for marker, reader and record store, 21 cases with expected values generated from the Python model, result data block, OB1 | `plc/test/`, `dmx/bench.py`, [docs/PLCSIM_RUN.md](docs/PLCSIM_RUN.md) |
+| Tests | Published vectors, an independent library (tests only), closed forms, published grade tables, SCL blocks, the search, the PLC test bench through the translator | `tests/` |
 
 ## How to run
 
@@ -97,7 +98,7 @@ The last command rewrites `results/` and `docs/img/` (about two minutes on four 
 - Grading is simplified where public sources stop: no transition-ratio test in fixed pattern damage, no minimum-reflectance grade, cell modulation graded on the modulation scale. See DOSSIER section 7.3.
 - The locator assumes an axis-aligned symbol. Rotation and perspective are not modelled.
 - Only ASCII encodation, single-block square symbols and errors-only decoding.
-- The SCL blocks compile in TIA Portal V18 for an S7-1513 with 0 errors and 0 warnings (`scripts/tia_build.ps1`, record in `results/tia_compile.txt`). The blocks never ran on a PLC or in PLCSIM.
+- The SCL blocks compile in TIA Portal V18 for an S7-1513 with 0 errors and 0 warnings (`scripts/tia_build.ps1`, record in `results/tia_compile.txt`). The blocks never ran on a PLC or in PLCSIM. A self-checking test project for PLCSIM is prepared: it compiles with 0 errors and 0 warnings (`results/tia_compile_testbench.txt`), and its 21 cases pass when the same sources run through the translator. The PLCSIM run itself is still open, see [docs/PLCSIM_RUN.md](docs/PLCSIM_RUN.md).
 - The state-space search covers one fault per run, power loss only between controller cycles, parts at least one cycle apart, shortened time-outs, and a reader that never returns a wrong but valid code. Liveness is not checked.
 - No aging of the mark in the field (scratches, dirt, UV).
 

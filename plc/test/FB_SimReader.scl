@@ -1,0 +1,75 @@
+FUNCTION_BLOCK "FB_SimReader"
+TITLE = Test bench stand-in for the code reader
+{ S7_Optimized_Access := 'TRUE' }
+AUTHOR : chad416
+VERSION : 0.1
+//  Deterministic model of the stand-in reader protocol (DOSSIER section 4.2). Not a real reader.
+//  The result is there one call after the trigger and stays until the trigger drops.
+//  A complete mark is read with its content; no mark or a partial mark gives "no read".
+//  SpoilReads turns the first n reads of a complete mark into "no read".
+   VAR_INPUT
+      RdTrigger : Bool;
+      PartPresent : Bool;
+      MarkState : Int;   // 0 no mark, 1 partial, 2 complete
+      MarkPartNo : DInt;
+      MarkVarCode : Int;
+      MarkSerial : DInt;
+      SpoilReads : Int;
+      NewPart : Bool;   // a new part has arrived: count its reads from zero
+   END_VAR
+
+   VAR_OUTPUT
+      RdDone : Bool;
+      RdOk : Bool;
+      RdPartNo : DInt;
+      RdVariant : Int;
+      RdSerial : DInt;
+   END_VAR
+
+   VAR
+      HasResult : Bool;
+      ResOk : Bool;
+      ResPartNo : DInt;
+      ResVariant : Int;
+      ResSerial : DInt;
+      GoodReads : Int;   // reads of a complete mark on this part so far
+   END_VAR
+
+BEGIN
+   IF #NewPart THEN
+      #GoodReads := 0;
+   END_IF;
+
+   IF NOT #RdTrigger THEN
+      #HasResult := FALSE;
+      #ResOk := FALSE;
+      #ResPartNo := 0;
+      #ResVariant := 0;
+      #ResSerial := 0;
+   ELSIF NOT #HasResult THEN
+      #HasResult := TRUE;
+      #ResOk := FALSE;
+      #ResPartNo := 0;
+      #ResVariant := 0;
+      #ResSerial := 0;
+      IF #PartPresent AND #MarkState = 2 THEN
+         IF #GoodReads >= #SpoilReads THEN
+            #ResOk := TRUE;
+            #ResPartNo := #MarkPartNo;
+            #ResVariant := #MarkVarCode;
+            #ResSerial := #MarkSerial;
+         END_IF;
+         IF #GoodReads < 1000 THEN
+            #GoodReads := #GoodReads + 1;
+         END_IF;
+      END_IF;
+   END_IF;
+
+   REGION Outputs
+   #RdDone := #HasResult;
+   #RdOk := #ResOk;
+   #RdPartNo := #ResPartNo;
+   #RdVariant := #ResVariant;
+   #RdSerial := #ResSerial;
+   END_REGION
+END_FUNCTION_BLOCK

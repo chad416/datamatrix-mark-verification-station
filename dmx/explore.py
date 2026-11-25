@@ -49,8 +49,11 @@ PLC_DIR = ROOT / "plc"
 
 # part type -> (part number, variant, marking job). Two rows of the recipe table are enough
 # to cover "same type again" and "changeover".
-TYPES = {"A": (83702051, 17, 205), "B": (83702052, 4, 206)}
-JOB_CONTENT = {job: (pn, var) for pn, var, job in TYPES.values()}
+TYPES = {"A": (83702051, 17, 205), "B": (83702052, 4, 206),
+         "C": (83700017, 17, 17),        # an ordinary row of the table; used by the PLC test bench only
+         "U": (12345678, 1, 0)}          # a part number that is not in the table; test bench only
+ARRIVAL_TYPES = ("A", "B")               # the part types the state-space search lets arrive
+JOB_CONTENT = {job: (pn, var) for pn, var, job in TYPES.values() if job > 0}
 PARAMS = {"TmoLoad": 3, "TmoMark": 4, "TmoRead": 3, "TmoRec": 3, "MaxReads": 2}
 MARK_CYCLES = (1, 2, 3)        # controller cycles a mark can take (time-out: 4)
 FAULTS = ("marker_no_load", "marker_hang", "marker_fault", "stale_job", "stale_serial", "stale_both",
@@ -117,6 +120,7 @@ class Explorer:
         self.plc = self.blocks["FB_MarkStation"]()
         self.names = tuple(k for k in vars(self.plc) if k not in self.plc.INPUTS)
         self.max_parts, self.faults, self.max_states, self.stop_at_first = max_parts, tuple(faults), max_states, stop_at_first
+        self.arrival_types = ARRIVAL_TYPES
 
     # -- controller ---------------------------------------------------------
     def _restore(self, ps):
@@ -152,7 +156,7 @@ class Explorer:
         """Things that can happen before a controller cycle: (label, env, power_cycle)."""
         yield "-", env, False
         if env.part is None and not env.gap and env.n_parts < self.max_parts:
-            for t in TYPES:
+            for t in self.arrival_types:
                 yield f"part {t} arrives", env._replace(part=Part(t, None, 0), n_parts=env.n_parts + 1), False
         if env.fault:
             return

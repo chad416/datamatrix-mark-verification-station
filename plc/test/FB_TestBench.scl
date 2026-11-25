@@ -1,0 +1,321 @@
+FUNCTION_BLOCK "FB_TestBench"
+TITLE = Self-checking test bench for the marking station blocks
+{ S7_Optimized_Access := 'TRUE' }
+AUTHOR : chad416
+VERSION : 0.1
+//  Runs inside the PLC with no outside stimulus. Call it once per cycle.
+//    Phase 0  loads the 320-row recipe table into "FB_JobSelect", one row per call
+//    Phase 1  runs the cases of "FB_BenchCases" one after the other: parts arrive, the station
+//             block works against the stand-ins for marker, reader and record store, and
+//             after each case twelve values are compared with the expected ones
+//    Phase 2  finished: the result is held, nothing is called any more
+//  Order inside one call of phase 1, the same as in the Python model (dmx/bench.py):
+//    part arrives or is taken out -> job select -> station -> marker -> reader -> records -> part leaves
+//  Checks per case (FirstFailedCheck):
+//     1 parts released          5 start commands           9 void records
+//     2 parts rejected          6 sum of job numbers      10 sum of recorded serials
+//     3 parts taken out         7 last serial             11 checksum of the code content
+//     4 sum of alarm codes      8 good records            12 released parts with a wrong code (must be 0)
+//    13 the case did not finish within 400 calls
+   VAR_OUTPUT
+      Done : Bool;
+      AllPassed : Bool;
+      CasesTotal : Int;
+      CasesRun : Int;
+      CasesPassed : Int;
+      CasesFailed : Int;
+      FirstFailedCase : Int;
+      FirstFailedCheck : Int;
+      Calls : DInt;   // calls of this block until it was done
+      CasePass : Array[1..32] of Bool;
+   END_VAR
+
+   VAR
+      Cases : "FB_BenchCases";
+      JobSel : "FB_JobSelect";
+      Station : "FB_MarkStation";
+      Marker : "FB_SimMarker";
+      Reader : "FB_SimReader";
+      Records : "FB_SimRecords";
+      Code : "FB_CodeContent";
+      Phase : Int;
+      RowIx : Int;
+      CaseIx : Int;
+      CallCount : DInt;
+      StepNow : Int;   // step of the station before this call
+      ArrivedCount : Int;   // parts of the current case that have arrived
+      ActiveFault : Int;
+      PartHere : Bool;
+      PartPn : DInt;
+      PartVar : Int;
+      InPn : DInt;
+      InVar : Int;
+      MarkState : Int;   // mark on the part in the nest: 0 none, 1 partial, 2 complete
+      MarkPn : DInt;
+      MarkVar : Int;
+      MarkSer : DInt;
+      StartsThisPart : Int;
+      GapFlag : Bool;   // a part has just left: the next one comes one call later at the earliest
+      RemovedDone : Bool;
+      NewPartPulse : Bool;
+      Spoil : Int;
+      NReleased : Int;
+      NRejected : Int;
+      NRemoved : Int;
+      AlarmSum : Int;
+      MarkStarts : Int;
+      JobSum : DInt;
+      CodeSum : DInt;
+      WrongReleased : Int;
+      LastReleasedSerial : DInt;
+      GoodBase : Int;
+      VoidBase : Int;
+      SumBase : DInt;
+      CaseCalls : Int;
+      FailCheck : Int;
+      NRun : Int;
+      NPassed : Int;
+      NFailed : Int;
+      FirstCase : Int;
+      FirstCheck : Int;
+      k : Int;
+   END_VAR
+
+BEGIN
+   IF #Phase < 2 AND #CallCount < 2000000000 THEN
+      #CallCount := #CallCount + 1;
+   END_IF;
+
+   IF #Phase = 0 THEN
+      REGION Recipe
+      IF #RowIx < 1 THEN
+         #RowIx := 1;
+      END_IF;
+      #Cases(CaseNo := 0, PartIx := 0, Row := #RowIx);
+      #JobSel(PartNo := 0, VarCode := 0, WrEnable := TRUE, WrIndex := #RowIx,
+              WrPartNo := #Cases.RowPartNo, WrVariant := #Cases.RowVarCode, WrJob := #Cases.RowJob);
+      #RowIx := #RowIx + 1;
+      IF #RowIx > 320 THEN
+         #CaseIx := 1;
+         #Phase := 1;
+      END_IF;
+      END_REGION
+   ELSIF #Phase = 1 THEN
+      #StepNow := #Station.Step;
+      #Cases(CaseNo := #CaseIx, PartIx := #ArrivedCount + 1, Row := 0);
+
+      IF #ArrivedCount >= #Cases.NParts AND NOT #PartHere AND NOT #GapFlag AND #StepNow = 10 THEN
+         REGION Evaluate
+         // the lowest failed check number wins
+         #FailCheck := 0;
+         IF #WrongReleased <> 0 THEN
+            #FailCheck := 12;
+         END_IF;
+         IF #CodeSum <> #Cases.ExpCodeSum THEN
+            #FailCheck := 11;
+         END_IF;
+         IF #Records.SerialSum - #SumBase <> #Cases.ExpRecSerialSum THEN
+            #FailCheck := 10;
+         END_IF;
+         IF #Records.VoidCount - #VoidBase <> #Cases.ExpVoid THEN
+            #FailCheck := 9;
+         END_IF;
+         IF #Records.GoodCount - #GoodBase <> #Cases.ExpGood THEN
+            #FailCheck := 8;
+         END_IF;
+         IF #Station.MkSerial <> #Cases.ExpSerialLast THEN
+            #FailCheck := 7;
+         END_IF;
+         IF #JobSum <> #Cases.ExpJobSum THEN
+            #FailCheck := 6;
+         END_IF;
+         IF #MarkStarts <> #Cases.ExpMarkStarts THEN
+            #FailCheck := 5;
+         END_IF;
+         IF #AlarmSum <> #Cases.ExpAlarmSum THEN
+            #FailCheck := 4;
+         END_IF;
+         IF #NRemoved <> #Cases.ExpRemoved THEN
+            #FailCheck := 3;
+         END_IF;
+         IF #NRejected <> #Cases.ExpRejected THEN
+            #FailCheck := 2;
+         END_IF;
+         IF #NReleased <> #Cases.ExpReleased THEN
+            #FailCheck := 1;
+         END_IF;
+
+         #NRun := #NRun + 1;
+         IF #FailCheck = 0 THEN
+            #NPassed := #NPassed + 1;
+         ELSE
+            #NFailed := #NFailed + 1;
+            IF #FirstCase = 0 THEN
+               #FirstCase := #CaseIx;
+               #FirstCheck := #FailCheck;
+            END_IF;
+         END_IF;
+         IF #CaseIx >= 1 AND #CaseIx <= 32 THEN
+            #CasePass[#CaseIx] := #FailCheck = 0;
+         END_IF;
+
+         #GoodBase := #Records.GoodCount;
+         #VoidBase := #Records.VoidCount;
+         #SumBase := #Records.SerialSum;
+         #NReleased := 0;
+         #NRejected := 0;
+         #NRemoved := 0;
+         #AlarmSum := 0;
+         #MarkStarts := 0;
+         #JobSum := 0;
+         #CodeSum := 0;
+         #WrongReleased := 0;
+         #CaseCalls := 0;
+         #ArrivedCount := 0;
+         #CaseIx := #CaseIx + 1;
+         IF #CaseIx > #Cases.CasesTotal THEN
+            #Phase := 2;
+         END_IF;
+         END_REGION
+      ELSE
+         REGION PartArrivesOrIsTakenOut
+         #NewPartPulse := FALSE;
+         IF NOT #PartHere AND NOT #GapFlag AND #ArrivedCount < #Cases.NParts AND #StepNow = 10 THEN
+            #ArrivedCount := #ArrivedCount + 1;
+            #PartHere := TRUE;
+            #PartPn := #Cases.PartNo;
+            #PartVar := #Cases.VarCode;
+            #MarkState := 0;
+            #MarkPn := 0;
+            #MarkVar := 0;
+            #MarkSer := 0;
+            #StartsThisPart := 0;
+            #RemovedDone := FALSE;
+            #NewPartPulse := TRUE;
+         ELSIF #PartHere AND #Cases.FaultKind = 12 AND #ArrivedCount = #Cases.FaultPart
+               AND #StepNow = #Cases.FaultArg AND NOT #RemovedDone THEN
+            #PartHere := FALSE;
+            #GapFlag := TRUE;
+            #RemovedDone := TRUE;
+            #NRemoved := #NRemoved + 1;
+         END_IF;
+         IF #ArrivedCount = #Cases.FaultPart THEN
+            #ActiveFault := #Cases.FaultKind;
+         ELSE
+            #ActiveFault := 0;
+         END_IF;
+         IF #PartHere THEN
+            #InPn := #PartPn;
+            #InVar := #PartVar;
+         ELSE
+            #InPn := 0;
+            #InVar := 0;
+         END_IF;
+         END_REGION
+
+         REGION BlocksUnderTest
+         #JobSel(PartNo := #InPn, VarCode := #InVar, WrEnable := FALSE, WrIndex := 0,
+                 WrPartNo := 0, WrVariant := 0, WrJob := 0);
+         #Station(PartPresent := #PartHere, PartNo := #InPn, VarCode := #InVar,
+                  JobNo := #JobSel.JobNo, JobFound := #JobSel.Found,
+                  MkLoaded := #Marker.MkLoaded, MkJobEcho := #Marker.MkJobEcho,
+                  MkSerialEcho := #Marker.MkSerialEcho, MkDone := #Marker.MkDone, MkFault := #Marker.MkFault,
+                  RdDone := #Reader.RdDone, RdOk := #Reader.RdOk, RdPartNo := #Reader.RdPartNo,
+                  RdVariant := #Reader.RdVariant, RdSerial := #Reader.RdSerial,
+                  RecAck := #Records.RecAck,
+                  TmoLoad := #Cases.TmoLoad, TmoMark := #Cases.TmoMark, TmoRead := #Cases.TmoRead,
+                  TmoRec := #Cases.TmoRec, MaxReads := #Cases.MaxReads);
+         // the alarm of a finished cycle is taken when the station comes back to Idle
+         IF #Station.Step = 10 AND #StepNow <> 10 AND #StepNow <> 0 THEN
+            #AlarmSum := #AlarmSum + #Station.Alarm;
+         END_IF;
+         END_REGION
+
+         REGION Marker
+         #Marker(MkLoad := #Station.MkLoad, MkStart := #Station.MkStart, MkJobNo := #Station.MkJobNo,
+                 MkSerial := #Station.MkSerial, PartPresent := #PartHere, FaultKind := #ActiveFault,
+                 NewPart := #NewPartPulse);
+         IF #Marker.StartEvent THEN
+            #StartsThisPart := #StartsThisPart + 1;
+            #MarkStarts := #MarkStarts + 1;
+            #JobSum := #JobSum + #Station.MkJobNo;
+            #Code(PartNo := #PartPn, VarCode := #PartVar, Serial := #Station.MkSerial);
+            FOR #k := 0 TO 11 DO
+               #CodeSum := #CodeSum + (#k + 1) * #Code.Cw[#k];
+            END_FOR;
+         END_IF;
+         IF #Marker.MarkEvent = 1 AND #PartHere THEN
+            #MarkState := 1;
+         ELSIF #Marker.MarkEvent = 2 AND #PartHere THEN
+            // the content of a job is the part number and variant of its recipe row
+            #Cases(CaseNo := #CaseIx, PartIx := #ArrivedCount + 1, Row := #Marker.MarkJob);
+            #MarkState := 2;
+            #MarkPn := #Cases.RowPartNo;
+            #MarkVar := #Cases.RowVarCode;
+            #MarkSer := #Marker.MarkSerial;
+         END_IF;
+         END_REGION
+
+         REGION ReaderAndRecords
+         IF #ActiveFault = 10 THEN
+            #Spoil := 1;
+         ELSIF #ActiveFault = 11 THEN
+            #Spoil := 99;
+         ELSE
+            #Spoil := 0;
+         END_IF;
+         #Reader(RdTrigger := #Station.RdTrigger, PartPresent := #PartHere, MarkState := #MarkState,
+                 MarkPartNo := #MarkPn, MarkVarCode := #MarkVar, MarkSerial := #MarkSer,
+                 SpoilReads := #Spoil, NewPart := #NewPartPulse);
+         #Records(RecReq := #Station.RecReq, RecSerial := #Station.RecSerial,
+                  RecStatus := #Station.RecStatus, Slow := #ActiveFault = 13);
+         END_REGION
+
+         REGION PartLeaves
+         #GapFlag := FALSE;
+         IF #PartHere AND #Station.Release THEN
+            #NReleased := #NReleased + 1;
+            // a released part must carry the complete code of its own type, with the serial of this
+            // cycle, a new serial, a good record for it, and exactly one start command
+            IF NOT (#MarkState = 2 AND #MarkPn = #PartPn AND #MarkVar = #PartVar
+                    AND #MarkSer = #Station.MkSerial AND #MarkSer > #LastReleasedSerial
+                    AND #Records.LastGoodSerial = #MarkSer AND #StartsThisPart = 1) THEN
+               #WrongReleased := #WrongReleased + 1;
+            END_IF;
+            #LastReleasedSerial := #MarkSer;
+            #PartHere := FALSE;
+            #GapFlag := TRUE;
+         ELSIF #PartHere AND #Station.Reject THEN
+            #NRejected := #NRejected + 1;
+            #PartHere := FALSE;
+            #GapFlag := TRUE;
+         END_IF;
+         END_REGION
+
+         REGION Watchdog
+         #CaseCalls := #CaseCalls + 1;
+         IF #CaseCalls > 400 THEN
+            #NRun := #NRun + 1;
+            #NFailed := #NFailed + 1;
+            IF #FirstCase = 0 THEN
+               #FirstCase := #CaseIx;
+               #FirstCheck := 13;
+            END_IF;
+            #Phase := 2;
+         END_IF;
+         END_REGION
+      END_IF;
+   END_IF;
+
+   REGION Outputs
+   #Done := #Phase = 2;
+   #AllPassed := #Phase = 2 AND #NFailed = 0 AND #NRun = #Cases.CasesTotal AND #NPassed = #Cases.CasesTotal;
+   #CasesTotal := #Cases.CasesTotal;
+   #CasesRun := #NRun;
+   #CasesPassed := #NPassed;
+   #CasesFailed := #NFailed;
+   #FirstFailedCase := #FirstCase;
+   #FirstFailedCheck := #FirstCheck;
+   #Calls := #CallCount;
+   END_REGION
+END_FUNCTION_BLOCK

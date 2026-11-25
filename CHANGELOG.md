@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.0 (2026-11-25)
+- Self-checking PLC test bench for S7-PLCSIM in `plc/test/`: stand-ins for marker, reader and record store, 21 cases, result data block `DB_TestResult`, OB1. Expected values are generated from the Python model (`dmx/bench.py`, `scripts/make_testbench.py`).
+- The bench runs through the translator in `tests/test_testbench.py` and in CI: 21 of 21 cases pass.
+- `scripts/tia_build.ps1` can also generate data block and OB sources, switch on simulation support, compile the hardware and save a project archive. Test project: 0 errors, 0 warnings (`results/tia_compile_testbench.txt`).
+- `docs/PLCSIM_RUN.md`: how to run it and which values mean pass. The PLCSIM run itself is not done yet.
+- Translator: elements of array outputs of a multi-instance.
+
 ## 1.0.1 (2026-11-25)
 - The SCL blocks compile in TIA Portal V18 with 0 errors and 0 warnings (`scripts/tia_build.ps1`, `results/tia_compile.txt`).
 - `FB_MarkStation`: the sequence state is the static `SeqStep`; the output `Step` is a copy written at the end of the block, so the block no longer reads its own outputs. `Timer` and `Reads` renamed to `StepTicks` and `ReadCount` (TIA rejects the old names). Behaviour and state-space results unchanged.
