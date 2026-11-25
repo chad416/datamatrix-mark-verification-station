@@ -1,0 +1,236 @@
+FUNCTION_BLOCK "FB_MarkStation"
+TITLE = Mark once, read back, record, then release: sequence of the marking station
+{ S7_Optimized_Access := 'TRUE' }
+AUTHOR : chad416
+VERSION : 0.1
+//  Steps (DOSSIER section 2):
+//     0 Init        first scan after a restart; an open cycle goes to Recover
+//    10 Idle        wait for a part
+//    20 Reserve     take the next serial number and make that retentive BEFORE any marker command
+//    30 Load        send job number and serial, wait for the marker to echo both
+//    40 Mark        one start command per part, never a second one
+//    50 Read        read back and compare part number, variant and serial
+//    51 ReadGap     drop the trigger between read attempts
+//    60 Record      write the "good" record and wait for the acknowledge
+//    65 Release     only step that sets Release
+//    70 Reject      reject the part and void the serial in the records
+//    80 Recover     restart with an open cycle: void the serial, reject what is in the nest
+//  Times are counted in calls of this block (call it from a cyclic interrupt).
+//  The marker and reader signals are a stand-in protocol (DOSSIER section 4.2). The real
+//  marker protocol is not public.
+   VAR_INPUT
+      PartPresent : Bool;   // presence sensor in the nest
+      PartNo : DInt;   // 8 digits, from the carrier or the line controller
+      VarCode : Int;   // 0..99
+      JobNo : Int;   // from "FB_JobSelect", same cycle
+      JobFound : Bool;
+      MkLoaded : Bool;   // marker: job and serial taken over, echoes valid
+      MkJobEcho : Int;
+      MkSerialEcho : DInt;
+      MkDone : Bool;   // marker: marking finished (stays TRUE until MkStart drops)
+      MkFault : Bool;
+      RdDone : Bool;   // reader: result valid (stays TRUE until RdTrigger drops)
+      RdOk : Bool;   // reader: decoded and quality limit met
+      RdPartNo : DInt;
+      RdVariant : Int;
+      RdSerial : DInt;
+      RecAck : Bool;   // traceability record stored
+      TmoLoad : Int := 200;   // calls
+      TmoMark : Int := 1500;
+      TmoRead : Int := 300;
+      TmoRec : Int := 300;
+      MaxReads : Int := 3;   // read attempts per part; the part is never marked again
+   END_VAR
+
+   VAR_OUTPUT
+      MkJobNo : Int;
+      MkSerial : DInt;
+      MkLoad : Bool;
+      MkStart : Bool;
+      RdTrigger : Bool;
+      RecReq : Bool;
+      RecSerial : DInt;
+      RecStatus : Int;   // 1 good, 2 void (scrap, removed or unknown)
+      Release : Bool;
+      Reject : Bool;
+      Step : Int;
+      Alarm : Int;   // 1 no job, 2 load, 3 mark, 4 read-back, 5 record, 6 part removed, 7 restart, 8 serial range
+   END_VAR
+
+   VAR RETAIN
+      NextSerial : DInt := 1;
+      InProg : Int;   // 0 no open cycle, 1 serial reserved, 2 mark commanded, 3 recorded good
+      InProgSerial : DInt;
+   END_VAR
+
+   VAR
+      StepPrev : Int;
+      Timer : Int;
+      Reads : Int;
+      Serial : DInt;
+      Job : Int;
+      CurPartNo : DInt;
+      CurVariant : Int;
+      VoidPhase : Int;   // 0 wait until the record acknowledge is low, 1 request, 2 done
+   END_VAR
+
+BEGIN
+   REGION StepTimer
+   IF #Step <> #StepPrev THEN
+      #Timer := 0;
+      #StepPrev := #Step;
+   ELSIF (#Step = 30 OR #Step = 40 OR #Step = 50 OR #Step = 51 OR #Step = 60) AND #Timer < 32000 THEN
+      #Timer := #Timer + 1;   // only the steps with a time-out count
+   END_IF;
+   END_REGION
+
+   REGION PresenceMonitor
+   // a part that leaves the nest during an open cycle is never released
+   IF #Step >= 20 AND #Step <= 60 AND NOT #PartPresent THEN
+      #Alarm := 6;
+      #Step := 70;
+   END_IF;
+   END_REGION
+
+   REGION Sequence
+   IF #Step = 0 THEN
+      #VoidPhase := 0;
+      IF #InProg <> 0 THEN
+         #Step := 80;
+      ELSE
+         #Step := 10;
+      END_IF;
+   ELSIF #Step = 10 THEN
+      #VoidPhase := 0;
+      #Reads := 0;
+      IF #PartPresent THEN
+         #Alarm := 0;
+         #CurPartNo := #PartNo;
+         #CurVariant := #VarCode;
+         #Job := #JobNo;
+         IF NOT #JobFound OR #JobNo <= 0 THEN
+            #Alarm := 1;
+            #Step := 70;
+         ELSIF #NextSerial < 1 OR #NextSerial > 999999999 THEN
+            #Alarm := 8;
+            #Step := 70;
+         ELSE
+            #Step := 20;
+         END_IF;
+      END_IF;
+   ELSIF #Step = 20 THEN
+      // write order matters if power fails inside this cycle: the counter moves first
+      #Serial := #NextSerial;
+      #InProgSerial := #NextSerial;
+      #NextSerial := #NextSerial + 1;
+      #InProg := 1;
+      #Step := 30;
+   ELSIF #Step = 30 THEN
+      IF #MkFault THEN
+         #Alarm := 2;
+         #Step := 70;
+      ELSIF #MkLoaded AND NOT #MkDone AND #MkJobEcho = #Job AND #MkSerialEcho = #Serial THEN
+         #InProg := 2;
+         #Step := 40;
+      ELSIF #Timer >= #TmoLoad THEN
+         #Alarm := 2;
+         #Step := 70;
+      END_IF;
+   ELSIF #Step = 40 THEN
+      IF #MkFault THEN
+         #Alarm := 3;
+         #Step := 70;
+      ELSIF #MkDone THEN
+         #Step := 50;
+      ELSIF #Timer >= #TmoMark THEN
+         #Alarm := 3;
+         #Step := 70;
+      END_IF;
+   ELSIF #Step = 50 THEN
+      IF #RdDone THEN
+         IF #RdOk AND #RdPartNo = #CurPartNo AND #RdVariant = #CurVariant AND #RdSerial = #Serial THEN
+            #Step := 60;
+         ELSE
+            #Reads := #Reads + 1;
+            IF #Reads >= #MaxReads THEN
+               #Alarm := 4;
+               #Step := 70;
+            ELSE
+               #Step := 51;
+            END_IF;
+         END_IF;
+      ELSIF #Timer >= #TmoRead THEN
+         #Alarm := 4;
+         #Step := 70;
+      END_IF;
+   ELSIF #Step = 51 THEN
+      IF NOT #RdDone THEN
+         #Step := 50;
+      ELSIF #Timer >= #TmoRead THEN
+         #Alarm := 4;
+         #Step := 70;
+      END_IF;
+   ELSIF #Step = 60 THEN
+      IF #RecAck THEN
+         #InProg := 3;
+         #Step := 65;
+      ELSIF #Timer >= #TmoRec THEN
+         #Alarm := 5;
+         #Step := 70;
+      END_IF;
+   ELSIF #Step = 65 THEN
+      IF NOT #PartPresent THEN
+         #InProg := 0;
+         #Step := 10;
+      END_IF;
+   ELSIF #Step = 70 THEN
+      // the void request needs its own rising edge: wait until an older acknowledge is gone
+      IF #InProg = 0 THEN
+         #VoidPhase := 2;
+      ELSIF #VoidPhase = 0 AND NOT #RecAck THEN
+         #VoidPhase := 1;
+      ELSIF #VoidPhase = 1 AND #RecAck THEN
+         #VoidPhase := 2;
+      END_IF;
+      IF #VoidPhase = 2 AND NOT #PartPresent THEN
+         #InProg := 0;
+         #Step := 10;
+      END_IF;
+   ELSIF #Step = 80 THEN
+      #Alarm := 7;
+      #Serial := #InProgSerial;
+      // "recorded good" and the nest empty: the part left before the restart.
+      // A part in the nest after a restart is never released: it cannot be proven
+      // to be the part that was verified.
+      IF #InProg = 3 AND NOT #PartPresent THEN
+         #InProg := 0;
+         #Step := 10;
+      ELSE
+         #Step := 70;
+      END_IF;
+   ELSE
+      #Step := 0;
+   END_IF;
+   END_REGION
+
+   REGION Outputs
+   #MkJobNo := #Job;
+   #MkSerial := #Serial;
+   #MkLoad := #Step = 30 OR #Step = 40;
+   #MkStart := #Step = 40;
+   #RdTrigger := #Step = 50;
+   #Release := #Step = 65;
+   #Reject := #Step = 70;
+   IF #Step = 60 THEN
+      #RecSerial := #Serial;
+      #RecStatus := 1;
+      #RecReq := TRUE;
+   ELSIF #Step = 70 AND #VoidPhase = 1 THEN
+      #RecSerial := #InProgSerial;
+      #RecStatus := 2;
+      #RecReq := TRUE;
+   ELSE
+      #RecReq := FALSE;
+   END_IF;
+   END_REGION
+END_FUNCTION_BLOCK

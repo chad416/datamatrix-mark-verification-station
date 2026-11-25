@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+results/summary_quick.json
+results/handshake_exploration_quick.md

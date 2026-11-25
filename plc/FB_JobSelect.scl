@@ -1,0 +1,67 @@
+FUNCTION_BLOCK "FB_JobSelect"
+TITLE = Marking job from the recipe table by part number and variant
+{ S7_Optimized_Access := 'TRUE' }
+AUTHOR : chad416
+VERSION : 0.1
+//  The marker stores the jobs; this table only says which job belongs to which part.
+//  A part that is not in the table, or that is in it twice, gets no job (Found = FALSE).
+//  Rows are written one at a time (recipe download from the HMI or the line controller).
+   VAR_INPUT
+      PartNo : DInt;
+      VarCode : Int;
+      WrEnable : Bool;
+      WrIndex : Int;   // 1..320
+      WrPartNo : DInt;
+      WrVariant : Int;
+      WrJob : Int;   // 0 clears the row
+   END_VAR
+
+   VAR_OUTPUT
+      JobNo : Int;
+      Found : Bool;
+      Ambiguous : Bool;
+      Rows : Int;   // rows in use
+   END_VAR
+
+   VAR RETAIN
+      TblPartNo : Array[1..320] of DInt;
+      TblVariant : Array[1..320] of Int;
+      TblJob : Array[1..320] of Int;
+   END_VAR
+
+   VAR_TEMP
+      i : Int;
+      hits : Int;
+   END_VAR
+
+BEGIN
+   REGION Download
+   IF #WrEnable AND #WrIndex >= 1 AND #WrIndex <= 320 THEN
+      #TblPartNo[#WrIndex] := #WrPartNo;
+      #TblVariant[#WrIndex] := #WrVariant;
+      #TblJob[#WrIndex] := #WrJob;
+   END_IF;
+   END_REGION
+
+   REGION Lookup
+   #hits := 0;
+   #JobNo := 0;
+   #Rows := 0;
+   FOR #i := 1 TO 320 DO
+      IF #TblJob[#i] > 0 THEN
+         #Rows := #Rows + 1;
+         IF #TblPartNo[#i] = #PartNo AND #TblVariant[#i] = #VarCode THEN
+            #hits := #hits + 1;
+            IF #hits = 1 THEN
+               #JobNo := #TblJob[#i];
+            END_IF;
+         END_IF;
+      END_IF;
+   END_FOR;
+   #Found := #hits = 1;
+   #Ambiguous := #hits > 1;
+   IF NOT #Found THEN
+      #JobNo := 0;
+   END_IF;
+   END_REGION
+END_FUNCTION_BLOCK

@@ -1,0 +1,62 @@
+FUNCTION_BLOCK "FB_CodeContent"
+TITLE = Data codewords of the 16x16 Data Matrix symbol from part number, variant and serial
+{ S7_Optimized_Access := 'TRUE' }
+AUTHOR : chad416
+VERSION : 0.1
+//  Content: 8 digits part number, 2 digits variant, 9 digits serial = 19 digits.
+//  ASCII encodation of ECC 200: a pair of digits is one codeword (130 + value), a single
+//  digit is its ASCII code + 1. Ten codewords, then two pads (129 and 147) fill the twelve
+//  data codewords of a 16x16 symbol. The marker adds the error correction.
+//  The same codewords come out of the Python encoder (tests/test_plc.py).
+   VAR_INPUT
+      PartNo : DInt;   // 0..99999999
+      VarCode : Int;   // 0..99
+      Serial : DInt;   // 0..999999999
+   END_VAR
+
+   VAR_OUTPUT
+      Cw : Array[0..11] of Int;
+      Valid : Bool;
+   END_VAR
+
+   VAR_TEMP
+      rest : DInt;
+      k : Int;
+   END_VAR
+
+BEGIN
+   #Valid := #PartNo >= 0 AND #PartNo <= 99999999 AND #VarCode >= 0 AND #VarCode <= 99
+             AND #Serial >= 0 AND #Serial <= 999999999;
+   IF NOT #Valid THEN
+      FOR #k := 0 TO 11 DO
+         #Cw[#k] := 0;
+      END_FOR;
+      RETURN;
+   END_IF;
+
+   REGION PartNumber
+   #rest := #PartNo;
+   FOR #k := 3 TO 0 BY -1 DO
+      #Cw[#k] := 130 + DINT_TO_INT(#rest MOD 100);
+      #rest := #rest / 100;
+   END_FOR;
+   END_REGION
+
+   REGION VarCode
+   #Cw[4] := 130 + #VarCode;
+   END_REGION
+
+   REGION SerialNumber
+   #Cw[9] := 49 + DINT_TO_INT(#Serial MOD 10);
+   #rest := #Serial / 10;
+   FOR #k := 8 TO 5 BY -1 DO
+      #Cw[#k] := 130 + DINT_TO_INT(#rest MOD 100);
+      #rest := #rest / 100;
+   END_FOR;
+   END_REGION
+
+   REGION Pads
+   #Cw[10] := 129;
+   #Cw[11] := 147;
+   END_REGION
+END_FUNCTION_BLOCK
