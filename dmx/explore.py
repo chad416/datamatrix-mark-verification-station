@@ -371,11 +371,11 @@ MUTANTS = {
         "      IF #RecAck THEN\n         #InProg := 3;",
         "      IF TRUE THEN\n         #InProg := 3;"),
     "open cycle ignored after a restart": (
-        "      IF #InProg <> 0 THEN\n         #Step := 80;",
-        "      IF FALSE THEN\n         #Step := 80;"),
+        "      IF #InProg <> 0 THEN\n         #SeqStep := 80;",
+        "      IF FALSE THEN\n         #SeqStep := 80;"),
     "presence not monitored during the cycle": (
-        "IF #Step >= 20 AND #Step <= 60 AND NOT #PartPresent THEN",
-        "IF #Step >= 20 AND #Step <= 60 AND FALSE THEN"),
+        "IF #SeqStep >= 20 AND #SeqStep <= 60 AND NOT #PartPresent THEN",
+        "IF #SeqStep >= 20 AND #SeqStep <= 60 AND FALSE THEN"),
     "serial counted up at release, not at reserve": None,      # two edits, see mutant_source
     "no echo check before the start": (
         "ELSIF #MkLoaded AND NOT #MkDone AND #MkJobEcho = #Job AND #MkSerialEcho = #Serial THEN",

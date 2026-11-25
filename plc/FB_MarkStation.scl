@@ -53,7 +53,7 @@ VERSION : 0.1
       RecStatus : Int;   // 1 good, 2 void (scrap, removed or unknown)
       Release : Bool;
       Reject : Bool;
-      Step : Int;
+      Step : Int;   // copy of the internal step, written once at the end of the block
       Alarm : Int;   // 1 no job, 2 load, 3 mark, 4 read-back, 5 record, 6 part removed, 7 restart, 8 serial range
    END_VAR
 
@@ -64,6 +64,7 @@ VERSION : 0.1
    END_VAR
 
    VAR
+      SeqStep : Int;   // the sequence state; the block never reads its own outputs
       StepPrev : Int;
       StepTicks : Int;
       ReadCount : Int;
@@ -76,31 +77,31 @@ VERSION : 0.1
 
 BEGIN
    REGION StepTimer
-   IF #Step <> #StepPrev THEN
+   IF #SeqStep <> #StepPrev THEN
       #StepTicks := 0;
-      #StepPrev := #Step;
-   ELSIF (#Step = 30 OR #Step = 40 OR #Step = 50 OR #Step = 51 OR #Step = 60) AND #StepTicks < 32000 THEN
+      #StepPrev := #SeqStep;
+   ELSIF (#SeqStep = 30 OR #SeqStep = 40 OR #SeqStep = 50 OR #SeqStep = 51 OR #SeqStep = 60) AND #StepTicks < 32000 THEN
       #StepTicks := #StepTicks + 1;   // only the steps with a time-out count
    END_IF;
    END_REGION
 
    REGION PresenceMonitor
    // a part that leaves the nest during an open cycle is never released
-   IF #Step >= 20 AND #Step <= 60 AND NOT #PartPresent THEN
+   IF #SeqStep >= 20 AND #SeqStep <= 60 AND NOT #PartPresent THEN
       #Alarm := 6;
-      #Step := 70;
+      #SeqStep := 70;
    END_IF;
    END_REGION
 
    REGION Sequence
-   IF #Step = 0 THEN
+   IF #SeqStep = 0 THEN
       #VoidPhase := 0;
       IF #InProg <> 0 THEN
-         #Step := 80;
+         #SeqStep := 80;
       ELSE
-         #Step := 10;
+         #SeqStep := 10;
       END_IF;
-   ELSIF #Step = 10 THEN
+   ELSIF #SeqStep = 10 THEN
       #VoidPhase := 0;
       #ReadCount := 0;
       IF #PartPresent THEN
@@ -110,80 +111,80 @@ BEGIN
          #Job := #JobNo;
          IF NOT #JobFound OR #JobNo <= 0 THEN
             #Alarm := 1;
-            #Step := 70;
+            #SeqStep := 70;
          ELSIF #NextSerial < 1 OR #NextSerial > 999999999 THEN
             #Alarm := 8;
-            #Step := 70;
+            #SeqStep := 70;
          ELSE
-            #Step := 20;
+            #SeqStep := 20;
          END_IF;
       END_IF;
-   ELSIF #Step = 20 THEN
+   ELSIF #SeqStep = 20 THEN
       // write order matters if power fails inside this cycle: the counter moves first
       #Serial := #NextSerial;
       #InProgSerial := #NextSerial;
       #NextSerial := #NextSerial + 1;
       #InProg := 1;
-      #Step := 30;
-   ELSIF #Step = 30 THEN
+      #SeqStep := 30;
+   ELSIF #SeqStep = 30 THEN
       IF #MkFault THEN
          #Alarm := 2;
-         #Step := 70;
+         #SeqStep := 70;
       ELSIF #MkLoaded AND NOT #MkDone AND #MkJobEcho = #Job AND #MkSerialEcho = #Serial THEN
          #InProg := 2;
-         #Step := 40;
+         #SeqStep := 40;
       ELSIF #StepTicks >= #TmoLoad THEN
          #Alarm := 2;
-         #Step := 70;
+         #SeqStep := 70;
       END_IF;
-   ELSIF #Step = 40 THEN
+   ELSIF #SeqStep = 40 THEN
       IF #MkFault THEN
          #Alarm := 3;
-         #Step := 70;
+         #SeqStep := 70;
       ELSIF #MkDone THEN
-         #Step := 50;
+         #SeqStep := 50;
       ELSIF #StepTicks >= #TmoMark THEN
          #Alarm := 3;
-         #Step := 70;
+         #SeqStep := 70;
       END_IF;
-   ELSIF #Step = 50 THEN
+   ELSIF #SeqStep = 50 THEN
       IF #RdDone THEN
          IF #RdOk AND #RdPartNo = #CurPartNo AND #RdVariant = #CurVariant AND #RdSerial = #Serial THEN
-            #Step := 60;
+            #SeqStep := 60;
          ELSE
             #ReadCount := #ReadCount + 1;
             IF #ReadCount >= #MaxReads THEN
                #Alarm := 4;
-               #Step := 70;
+               #SeqStep := 70;
             ELSE
-               #Step := 51;
+               #SeqStep := 51;
             END_IF;
          END_IF;
       ELSIF #StepTicks >= #TmoRead THEN
          #Alarm := 4;
-         #Step := 70;
+         #SeqStep := 70;
       END_IF;
-   ELSIF #Step = 51 THEN
+   ELSIF #SeqStep = 51 THEN
       IF NOT #RdDone THEN
-         #Step := 50;
+         #SeqStep := 50;
       ELSIF #StepTicks >= #TmoRead THEN
          #Alarm := 4;
-         #Step := 70;
+         #SeqStep := 70;
       END_IF;
-   ELSIF #Step = 60 THEN
+   ELSIF #SeqStep = 60 THEN
       IF #RecAck THEN
          #InProg := 3;
-         #Step := 65;
+         #SeqStep := 65;
       ELSIF #StepTicks >= #TmoRec THEN
          #Alarm := 5;
-         #Step := 70;
+         #SeqStep := 70;
       END_IF;
-   ELSIF #Step = 65 THEN
+   ELSIF #SeqStep = 65 THEN
       IF NOT #PartPresent THEN
          #InProg := 0;
-         #Step := 10;
+         #SeqStep := 10;
       END_IF;
-   ELSIF #Step = 70 THEN
+   ELSIF #SeqStep = 70 THEN
       // the void request needs its own rising edge: wait until an older acknowledge is gone
       IF #InProg = 0 THEN
          #VoidPhase := 2;
@@ -194,9 +195,9 @@ BEGIN
       END_IF;
       IF #VoidPhase = 2 AND NOT #PartPresent THEN
          #InProg := 0;
-         #Step := 10;
+         #SeqStep := 10;
       END_IF;
-   ELSIF #Step = 80 THEN
+   ELSIF #SeqStep = 80 THEN
       #Alarm := 7;
       #Serial := #InProgSerial;
       // "recorded good" and the nest empty: the part left before the restart.
@@ -204,33 +205,34 @@ BEGIN
       // to be the part that was verified.
       IF #InProg = 3 AND NOT #PartPresent THEN
          #InProg := 0;
-         #Step := 10;
+         #SeqStep := 10;
       ELSE
-         #Step := 70;
+         #SeqStep := 70;
       END_IF;
    ELSE
-      #Step := 0;
+      #SeqStep := 0;
    END_IF;
    END_REGION
 
    REGION Outputs
    #MkJobNo := #Job;
    #MkSerial := #Serial;
-   #MkLoad := #Step = 30 OR #Step = 40;
-   #MkStart := #Step = 40;
-   #RdTrigger := #Step = 50;
-   #Release := #Step = 65;
-   #Reject := #Step = 70;
-   IF #Step = 60 THEN
+   #MkLoad := #SeqStep = 30 OR #SeqStep = 40;
+   #MkStart := #SeqStep = 40;
+   #RdTrigger := #SeqStep = 50;
+   #Release := #SeqStep = 65;
+   #Reject := #SeqStep = 70;
+   IF #SeqStep = 60 THEN
       #RecSerial := #Serial;
       #RecStatus := 1;
       #RecReq := TRUE;
-   ELSIF #Step = 70 AND #VoidPhase = 1 THEN
+   ELSIF #SeqStep = 70 AND #VoidPhase = 1 THEN
       #RecSerial := #InProgSerial;
       #RecStatus := 2;
       #RecReq := TRUE;
    ELSE
       #RecReq := FALSE;
    END_IF;
+   #Step := #SeqStep;
    END_REGION
 END_FUNCTION_BLOCK

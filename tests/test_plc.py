@@ -141,3 +141,21 @@ def test_search_finds_a_counterexample_when_a_safeguard_is_removed(name):
 def test_reserved_words_are_refused():
     with pytest.raises(scl.SclError):
         scl.translate(['FUNCTION_BLOCK "X"\n VAR_INPUT\n Variant : Int;\n END_VAR\nBEGIN\nEND_FUNCTION_BLOCK\n'])
+
+
+def test_block_never_reads_its_own_outputs():
+    # TIA Portal warns "might not be initialized" when a block reads its own VAR_OUTPUT.
+    # The sequence state lives in the static SeqStep; Step is a copy written once, at the end.
+    import re
+    src = (ROOT / "plc" / "FB_MarkStation.scl").read_text(encoding="utf-8")
+    body = re.sub(r"//[^\n]*", "", src.split("BEGIN", 1)[1])
+    outputs = re.findall(r"^\s*(\w+)\s*:", src.split("VAR_OUTPUT", 1)[1].split("END_VAR", 1)[0], flags=re.M)
+    assert "Step" in outputs and "RETURN" not in body
+    for name in outputs:
+        uses = re.findall(rf"#{name}\b(?!\s*:=)", body)
+        assert uses == [], f"output #{name} is read {len(uses)} time(s)"
+    assert len(re.findall(r"#Step\s*:=\s*#SeqStep\s*;", body)) == 1
+    b = Bench()
+    for present in [True] * 9 + [False] * 2 + [True] * 5:
+        b.scan(present)
+        assert b.s.Step == b.s.SeqStep

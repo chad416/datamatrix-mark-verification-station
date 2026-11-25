@@ -229,11 +229,11 @@ The echo check alone is not needed for the five properties (mutant 7 gives no vi
 
 ## 10. Verification and validation plan
 
-Done here: 61 tests (published vectors, independent library, closed forms, published grade tables, SCL blocks, exhaustive search and seven mutants), the study, CI on every push.
+Done here: 62 tests (published vectors, independent library, closed forms, published grade tables, SCL blocks, exhaustive search and seven mutants), the study, CI on every push.
 
 Needed on a real station, not done:
 
-1. Repeat the block tests in PLCSIM (the SCL sources compile in TIA Portal V18 with 0 errors, `results/tia_compile.txt`).
+1. Repeat the block tests in PLCSIM (the SCL sources compile in TIA Portal V18 with 0 errors and 0 warnings, `results/tia_compile.txt`).
 2. Correlate the reader's cell contrast with a calibrated verifier on real marks; repeat the repeatability figure with a gauge study.
 3. Mark a focus, power and paint-thickness matrix on real parts; read each part on the station and on the weakest later reader; refit the limit.
 4. Replace the stand-in protocol with the marker's real one and rerun the search with its real failure behaviour.

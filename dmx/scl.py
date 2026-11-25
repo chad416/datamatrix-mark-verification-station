@@ -113,6 +113,7 @@ RESERVED = {
     "END_IF", "CASE", "OF", "END_CASE", "FOR", "TO", "BY", "DO", "END_FOR", "WHILE",
     "END_WHILE", "REPEAT", "UNTIL", "END_REPEAT", "EXIT", "CONTINUE", "RETURN", "GOTO",
     "AND", "OR", "XOR", "NOT", "MOD", "TRUE", "FALSE", "VAR", "BEGIN", "REGION", "END_REGION",
+    "TIMER", "READS",   # rejected by the TIA Portal V18 compiler as variable names in this project
 }
 
 
