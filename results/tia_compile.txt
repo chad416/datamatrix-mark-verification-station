@@ -1,0 +1,42 @@
+﻿TIA Portal V18, CPU OrderNumber:6ES7 513-1AL02-0AB0/V2.9, 2026-11-25 03:35
+generated FB_JobSelect
+generated FB_CodeContent
+generated FB_MarkStation
+COMPILE Warning  errors=0  warnings=28
+  Warning  PLC_1  
+    Warning  Program blocks  
+      Success  Main (OB1)  Block was successfully compiled.
+      Success  FB_JobSelect (FB1)  Block was successfully compiled.
+      Success  FB_CodeContent (FB2)  Block was successfully compiled.
+      Warning  FB_MarkStation (FB3)  
+        Warning  3  The parameter '#Step' might not be initialized.
+        Warning  5  The parameter '#Step' might not be initialized.
+        Warning  6  The parameter '#Step' might not be initialized.
+        Warning  6  The parameter '#Step' might not be initialized.
+        Warning  6  The parameter '#Step' might not be initialized.
+        Warning  6  The parameter '#Step' might not be initialized.
+        Warning  6  The parameter '#Step' might not be initialized.
+        Warning  13  The parameter '#Step' might not be initialized.
+        Warning  13  The parameter '#Step' might not be initialized.
+        Warning  20  The parameter '#Step' might not be initialized.
+        Warning  27  The parameter '#Step' might not be initialized.
+        Warning  45  The parameter '#Step' might not be initialized.
+        Warning  52  The parameter '#Step' might not be initialized.
+        Warning  63  The parameter '#Step' might not be initialized.
+        Warning  73  The parameter '#Step' might not be initialized.
+        Warning  90  The parameter '#Step' might not be initialized.
+        Warning  97  The parameter '#Step' might not be initialized.
+        Warning  105  The parameter '#Step' might not be initialized.
+        Warning  110  The parameter '#Step' might not be initialized.
+        Warning  123  The parameter '#Step' might not be initialized.
+        Warning  143  The parameter '#Step' might not be initialized.
+        Warning  143  The parameter '#Step' might not be initialized.
+        Warning  144  The parameter '#Step' might not be initialized.
+        Warning  145  The parameter '#Step' might not be initialized.
+        Warning  146  The parameter '#Step' might not be initialized.
+        Warning  147  The parameter '#Step' might not be initialized.
+        Warning  148  The parameter '#Step' might not be initialized.
+        Warning  152  The parameter '#Step' might not be initialized.
+        Success    Block was successfully compiled.
+  Warning    Compiling finished (errors: 0; warnings: 28)
+

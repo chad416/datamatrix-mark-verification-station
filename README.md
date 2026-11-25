@@ -2,7 +2,7 @@
 
 Read-back limit and PLC handshake for a station that laser-marks a Data Matrix code (ECC 200) on a painted plastic part, reads it back and releases the part.
 
-> **Simulated study, no hardware.** The laser, the paint, the readers, the drift and every "measurement" here are models. Nothing was marked, read or measured. The Siemens SCL blocks were not compiled in TIA Portal; they run here through a small translator. Relations come from the sources in [docs/SOURCES.md](docs/SOURCES.md); every parameter value is illustrative unless that file names a source for it. ISO/IEC 16022, 15415 and 29158 are paywalled and were not read: their content is used only as printed in the public sources listed there.
+> **Simulated study, no hardware.** The laser, the paint, the readers, the drift and every "measurement" here are models. Nothing was marked, read or measured. The Siemens SCL blocks compile in TIA Portal V18 with 0 errors (record in `results/tia_compile.txt`); in the tests they run through a small translator, and they never ran on a PLC. Relations come from the sources in [docs/SOURCES.md](docs/SOURCES.md); every parameter value is illustrative unless that file names a source for it. ISO/IEC 16022, 15415 and 29158 are paywalled and were not read: their content is used only as printed in the public sources listed there.
 
 ## The question
 
@@ -97,7 +97,7 @@ The last command rewrites `results/` and `docs/img/` (about two minutes on four 
 - Grading is simplified where public sources stop: no transition-ratio test in fixed pattern damage, no minimum-reflectance grade, cell modulation graded on the modulation scale. See DOSSIER section 7.3.
 - The locator assumes an axis-aligned symbol. Rotation and perspective are not modelled.
 - Only ASCII encodation, single-block square symbols and errors-only decoding.
-- The SCL blocks were not compiled in TIA Portal and never ran on a PLC.
+- The SCL blocks compile in TIA Portal V18 for an S7-1513 with 0 errors and 28 warnings (`scripts/tia_build.ps1`, record in `results/tia_compile.txt`). The warnings are all of the kind "output parameter might not be initialized", because the block reads back its own outputs. The blocks never ran on a PLC or in PLCSIM.
 - The state-space search covers one fault per run, power loss only between controller cycles, parts at least one cycle apart, shortened time-outs, and a reader that never returns a wrong but valid code. Liveness is not checked.
 - No aging of the mark in the field (scratches, dirt, UV).
 

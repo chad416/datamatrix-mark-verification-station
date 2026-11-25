@@ -65,8 +65,8 @@ VERSION : 0.1
 
    VAR
       StepPrev : Int;
-      Timer : Int;
-      Reads : Int;
+      StepTicks : Int;
+      ReadCount : Int;
       Serial : DInt;
       Job : Int;
       CurPartNo : DInt;
@@ -77,10 +77,10 @@ VERSION : 0.1
 BEGIN
    REGION StepTimer
    IF #Step <> #StepPrev THEN
-      #Timer := 0;
+      #StepTicks := 0;
       #StepPrev := #Step;
-   ELSIF (#Step = 30 OR #Step = 40 OR #Step = 50 OR #Step = 51 OR #Step = 60) AND #Timer < 32000 THEN
-      #Timer := #Timer + 1;   // only the steps with a time-out count
+   ELSIF (#Step = 30 OR #Step = 40 OR #Step = 50 OR #Step = 51 OR #Step = 60) AND #StepTicks < 32000 THEN
+      #StepTicks := #StepTicks + 1;   // only the steps with a time-out count
    END_IF;
    END_REGION
 
@@ -102,7 +102,7 @@ BEGIN
       END_IF;
    ELSIF #Step = 10 THEN
       #VoidPhase := 0;
-      #Reads := 0;
+      #ReadCount := 0;
       IF #PartPresent THEN
          #Alarm := 0;
          #CurPartNo := #PartNo;
@@ -132,7 +132,7 @@ BEGIN
       ELSIF #MkLoaded AND NOT #MkDone AND #MkJobEcho = #Job AND #MkSerialEcho = #Serial THEN
          #InProg := 2;
          #Step := 40;
-      ELSIF #Timer >= #TmoLoad THEN
+      ELSIF #StepTicks >= #TmoLoad THEN
          #Alarm := 2;
          #Step := 70;
       END_IF;
@@ -142,7 +142,7 @@ BEGIN
          #Step := 70;
       ELSIF #MkDone THEN
          #Step := 50;
-      ELSIF #Timer >= #TmoMark THEN
+      ELSIF #StepTicks >= #TmoMark THEN
          #Alarm := 3;
          #Step := 70;
       END_IF;
@@ -151,22 +151,22 @@ BEGIN
          IF #RdOk AND #RdPartNo = #CurPartNo AND #RdVariant = #CurVariant AND #RdSerial = #Serial THEN
             #Step := 60;
          ELSE
-            #Reads := #Reads + 1;
-            IF #Reads >= #MaxReads THEN
+            #ReadCount := #ReadCount + 1;
+            IF #ReadCount >= #MaxReads THEN
                #Alarm := 4;
                #Step := 70;
             ELSE
                #Step := 51;
             END_IF;
          END_IF;
-      ELSIF #Timer >= #TmoRead THEN
+      ELSIF #StepTicks >= #TmoRead THEN
          #Alarm := 4;
          #Step := 70;
       END_IF;
    ELSIF #Step = 51 THEN
       IF NOT #RdDone THEN
          #Step := 50;
-      ELSIF #Timer >= #TmoRead THEN
+      ELSIF #StepTicks >= #TmoRead THEN
          #Alarm := 4;
          #Step := 70;
       END_IF;
@@ -174,7 +174,7 @@ BEGIN
       IF #RecAck THEN
          #InProg := 3;
          #Step := 65;
-      ELSIF #Timer >= #TmoRec THEN
+      ELSIF #StepTicks >= #TmoRec THEN
          #Alarm := 5;
          #Step := 70;
       END_IF;
