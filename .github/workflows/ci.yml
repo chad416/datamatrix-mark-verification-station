@@ -1,0 +1,51 @@
+name: ci
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Tests (published vectors, independent library, closed forms, SCL blocks, state-space search)
+        run: python -m pytest -q
+      - name: SCL sources translate (the TIA Portal build itself needs Windows and TIA Portal)
+        run: python -c "import glob; from dmx import scl; print(list(scl.load(sorted(glob.glob('plc/FB_*.scl')))))"
+      - name: Study, reduced size, and checks on its output
+        run: |
+          python scripts/run_all.py --quick
+          python - <<'PY'
+          import json
+          s = json.load(open("results/summary_quick.json"))
+          h = s["handshake"]
+          assert all(r["violations"] == 0 and r["complete"] for r in h["runs"]), h["runs"]
+          found = {m["mutant"]: m["violation"] for m in h["mutants"]}
+          assert found.pop("no echo check before the start") is None
+          assert all(v for v in found.values()), found
+          n = s["nominal"]
+          assert n["station_decode"] == 1.0 and n["later_read"] >= 0.99 and n["grade_counts"][4] == n["n"]
+          assert abs(s["beam"]["w0_um"] - 25.69) < 0.01 and abs(s["beam"]["zR_mm"] - 1.30) < 0.01
+          m = s["mix"]
+          r = m["rules"]
+          assert m["auc"][m["deciding_parameter"]] > 0.9
+          assert r["A1 decode only"]["escape_per_released"] < r["A0 no read-back"]["escape_per_released"]
+          assert r["A2 grade >= 4"]["escape_per_released"] <= r["A1 decode only"]["escape_per_released"]
+          fr = [r[f"A2 grade >= {g}"]["false_reject_of_readable"] for g in (1, 2, 3, 4)]
+          assert fr == sorted(fr)
+          for mech, rows in s["sweeps"].items():
+              assert rows[0]["station_decode"] == 1.0 and rows[-1]["later_read"] < rows[0]["later_read"], mech
+          print("quick study checks passed")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: results-quick
+          path: |
+            results/summary_quick.json
+            results/handshake_exploration_quick.md
