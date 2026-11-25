@@ -229,11 +229,11 @@ The echo check alone is not needed for the five properties (mutant 7 gives no vi
 
 ## 10. Verification and validation plan
 
-Done here: 71 tests (published vectors, independent library, closed forms, published grade tables, SCL blocks, exhaustive search and seven mutants, the PLC test bench through the translator), the study, CI on every push.
+Done here: 71 tests (published vectors, independent library, closed forms, published grade tables, SCL blocks, exhaustive search and seven mutants, the PLC test bench through the translator), the study, CI on every push. Outside the test suite: the PLC test bench in S7-PLCSIM Advanced, 21 of 21 cases ([docs/PLCSIM_RUN.md](docs/PLCSIM_RUN.md)).
 
 Needed on a real station, not done:
 
-1. Run the blocks in PLCSIM. Prepared, not run: the SCL sources compile in TIA Portal V18 with 0 errors and 0 warnings (`results/tia_compile.txt`), and a self-checking test project (`plc/test/`, 21 cases, expected values generated from the Python model) compiles the same way (`results/tia_compile_testbench.txt`) and passes 21 of 21 in the translator. Steps and pass values: [docs/PLCSIM_RUN.md](docs/PLCSIM_RUN.md). The bench has no power loss; item 5 stays.
+1. Run the blocks on the station's PLC. Done so far, in simulation only: the SCL sources compile in TIA Portal V18 with 0 errors and 0 warnings (`results/tia_compile.txt`), and a self-checking test project (`plc/test/`, 21 cases, expected values generated from the Python model) compiles the same way (`results/tia_compile_testbench.txt`) and passes 21 of 21 in the translator. On 25 November 2026 that project was upgraded to TIA Portal V20, compiled there (software 0 errors, 0 warnings) and run in S7-PLCSIM Advanced V7.0 Upd1: 21 of 21 cases passed with 803 bench calls, the count of the translator. Record: [docs/PLCSIM_RUN.md](docs/PLCSIM_RUN.md). A simulated CPU is not the station's PLC, and the bench has no power loss; item 5 stays.
 2. Correlate the reader's cell contrast with a calibrated verifier on real marks; repeat the repeatability figure with a gauge study.
 3. Mark a focus, power and paint-thickness matrix on real parts; read each part on the station and on the weakest later reader; refit the limit.
 4. Replace the stand-in protocol with the marker's real one and rerun the search with its real failure behaviour.
